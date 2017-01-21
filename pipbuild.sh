@@ -17,7 +17,7 @@ if ! [ -f "setup.py" ]; then
     echo "setver.sh must be run in the directory where setup.py is" >&2
     exit 1
 fi
-git
+
 if git tag | grep -q "${VER}"; then
     echo "Git tag for version ${VER} already exists." >&2
     exit 1
@@ -32,15 +32,19 @@ sed -i "s;^package_version.*=.*;package_version = '${VER}';"  setup.py
 sed -i "s;.*version.*;__version__ = '${VER}';" ${PACKAGE}/__init__.py
 
 # Upload to test pypi
-python setup.py sdist upload -r pypitest
+if [[ ${VER} == *"dev"* ]]; then
+    python setup.py sdist
+    git reset --hard
 
-# Reset the commit, we don't want versions in the commit
-git commit -a -m "Updated to version ${VER}"
+else
+    python setup.py sdist upload -r pypitest
+    # Reset the commit, we don't want versions in the commit
+    git commit -a -m "Updated to version ${VER}"
 
-git tag ${VER}
-git push
-git push --tags
-
+    git tag ${VER}
+    git push
+    git push --tags
+fi
 
 
 echo "If you're happy with this you can now run :"
