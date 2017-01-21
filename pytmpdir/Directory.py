@@ -1,4 +1,3 @@
-
 # Created by Synerty Pty Ltd
 # Copyright (C) 2013-2017 Synerty Pty Ltd (Australia)
 #
@@ -11,8 +10,8 @@ import os
 import shutil
 import tempfile
 import weakref
-from subprocess import check_output
 from platform import system
+from subprocess import check_output
 
 
 class DirSettings:
@@ -90,17 +89,17 @@ class Directory(object):
         self._autoDelete = autoDelete
 
         if initWithDir:
-            self.path = initWithDir
+            self._path = initWithDir
             self.scan()
 
         else:
             if (os.path.isdir(inDir if inDir else
                               DirSettings.tmpDirPath) is False):
                 os.mkdir(inDir if inDir else DirSettings.tmpDirPath)
-            self.path = tempfile.mkdtemp(dir=(inDir if inDir else
-                                              DirSettings.tmpDirPath))
+            self._path = tempfile.mkdtemp(dir=(inDir if inDir else
+                                               DirSettings.tmpDirPath))
 
-        closurePath = self.path
+        closurePath = self._path
 
         def cleanup(me):
             """ Cleanup
@@ -112,6 +111,14 @@ class Directory(object):
                 shutil.rmtree(closurePath)
 
         self.__cleanupRef = weakref.ref(self, cleanup)
+
+    @property
+    def path(self) -> str:
+        """ Path
+
+        :return The absoloute path of this directory
+        """
+        return self._path
 
     @property
     def files(self) -> ['File']:
@@ -180,6 +187,24 @@ class Directory(object):
         self._files[file.pathName] = file
         return file
 
+    def createTempFile(self, suffix=None, prefix=None, secure=True) -> 'File':
+        """ Create File
+
+        Creates a new file within the directory with a temporary file like name.
+
+        @return: Created file.
+        """
+        if not secure:
+            raise NotImplementedError("We only support secure files at this point")
+
+        # tempfile.mkstemp(suffix=None, prefix=None, dir=None, text=False)
+
+        newFileObj, newFileRealPath = tempfile.mkstemp(
+            suffix=suffix, prefix=prefix, dir=self._path)
+        newFileObj.close()
+
+        return self.createFile(pathName=newFileRealPath)
+
     def createHiddenFolder(self) -> 'File':
         """ Create Hidden Folder
 
@@ -191,7 +216,7 @@ class Directory(object):
         if not self._autoDelete:
             raise Exception("Hidden folders can only be created within"
                             " an autoDelete directory")
-        return tempfile.mkdtemp(dir=self.path, prefix=".")
+        return tempfile.mkdtemp(dir=self._path, prefix=".")
 
     def _listFilesWin(self) -> ['File']:
         """ List Files for Windows OS
@@ -203,7 +228,7 @@ class Directory(object):
         """
 
         output = []
-        for dirname, dirnames, filenames in os.walk(self.path):
+        for dirname, dirnames, filenames in os.walk(self._path):
             for subdirname in dirnames:
                 output.append(os.path.join(dirname, subdirname))
             for filename in filenames:
@@ -219,7 +244,7 @@ class Directory(object):
         @return: List of directory files and folders.
         """
 
-        find = "find %s -type f" % self.path
+        find = "find %s -type f" % self._path
         output = check_output(args=find.split()).strip().decode().split(
             '\n')
         return output
@@ -239,7 +264,7 @@ class Directory(object):
             if not pathName:  # Sometimes we get empty lines
                 continue
 
-            pathName = pathName[len(self.path) + 1:]
+            pathName = pathName[len(self._path) + 1:]
             file = File(self, pathName=pathName, exists=True)
             self._files[file.pathName] = file
 
@@ -258,8 +283,8 @@ class Directory(object):
         """
 
         d = Directory(autoDelete=autoDelete)
-        os.rmdir(d.path)  # shutil doesn't like it existing
-        shutil.copytree(self.path, d.path)
+        os.rmdir(d._path)  # shutil doesn't like it existing
+        shutil.copytree(self._path, d._path)
         d.scan()
         return d
 
@@ -287,6 +312,76 @@ class Directory(object):
 
         self._files.pop(oldPathName)
         self._files[file.pathName] = file
+
+
+class _NamedTempFileReaderCloser:
+    def __init__(self, fileObject):
+        self._isClosed = False
+        self._fileObject = fileObject
+
+    def close(self, *args):
+        if self._isClosed:
+            return
+        self._fileObject.close()
+        self._isClosed = True
+
+class NamedTempFileReader:
+    """ Named Temp File
+
+    This pytmpdir version of the NamedTemporaryFile keeps a strong reference to the
+    C{Directory} object, meaning you can pass it around just like a NamedTemporaryFile
+    and it will delete when it's done.
+
+    ::
+
+        dir = Directory()
+        file = dir.createTempFile()
+
+        # Write the data to the file, this closes it properly, allowing the reader to read
+        with file.open(write=True) as f:
+            f.write("some thing")
+
+        namedTempReader = file.namedTempFileReader()
+
+        # Pass namedTempReader to other code that takes a NamedTemporaryFile
+        somthingElse(namedTempReader)
+
+    """
+
+    def __init__(self, directory: Directory, file: 'File'):
+        self._directory = directory
+        self._file = file
+        self._fileObject = self._file.open()
+
+        closureFileObj = self._fileObject
+
+        self._closer = _NamedTempFileReaderCloser(self._fileObject)
+        closureCloser = self._closer
+        self.__cleanupRef = weakref.ref(self, closureCloser.close)
+
+    @property
+    def delete(self) -> bool:
+        return True
+
+    @delete.setter
+    def delete(self, value: bool):
+        raise Exception("You can not turn off auto delete for this class")
+
+    def close(self):
+        self._closer.close()
+
+    def __enter__(self):
+        self._fileObject.__enter__()
+        return self
+
+    def __exit__(self, exc, value, tb):
+        result = self._fileObject.__exit__(exc, value, tb)
+        self.close()
+        return result
+
+    def __iter__(self):
+        for line in self._fileObject:
+            yield line
 
 
 class File(object):
@@ -448,6 +543,24 @@ class File(object):
         if not os.path.exists(realDir):
             os.makedirs(realDir, DirSettings.defaultDirChmod)
         return open(self.realPath, flag)
+
+    def namedTempFileReader(self) -> NamedTempFileReader:
+        """ Named Temporary File Reader
+
+        This provides an object compatible with NamedTemporaryFile, used for reading this
+        files contents. This will still delete after the object falls out of scope.
+
+        This solves the problem on windows where a NamedTemporaryFile can not be read
+        while it's being written to
+        """
+
+        # Get the weak ref
+        directory = self._directory()
+        assert isinstance(directory, Directory), (
+            "Expected Directory, receieved %s" % directory)
+
+        # Return the object
+        return NamedTempFileReader(directory, self)
 
     def delete(self):
         """ Delete

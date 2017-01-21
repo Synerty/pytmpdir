@@ -80,11 +80,11 @@ class DirectoryTest(unittest.TestCase):
 
     def testDir(self):
         d = Directory()
-        assert (os.path.isdir(d.path))
+        assert (os.path.isdir(d._path))
 
         num = 10
         for x in range(num):
-            (fd, name) = mkstemp(dir=d.path)
+            (fd, name) = mkstemp(dir=d._path)
             with os.fdopen(fd, 'w') as f:
                 f.write(self.makeRandomContents())
 
@@ -108,7 +108,7 @@ class DirectoryTest(unittest.TestCase):
         [files[i].delete() for i in removeIndexes]
         self.assertEqual(len(d.files), len(files) - len(removeIndexes))
 
-        dirPath = d.path
+        dirPath = d._path
 
         d = None
 
