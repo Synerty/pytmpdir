@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 package_name = "pytmpdir"
-package_version = '0.2.2'
+package_version = '0.2.3'
 
 setup(
     name=package_name,
