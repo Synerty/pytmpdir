@@ -211,7 +211,10 @@ class Directory(object):
             suffix=suffix, prefix=prefix, dir=self._path)
         os.close(newFileNum)
 
-        return self.createFile(pathName=newFileRealPath)
+
+        file = File(self, path=path, name=name, pathName=pathName, exists=True)
+        self._files[file.pathName] = file
+        return file
 
     def createHiddenFolder(self) -> 'File':
         """ Create Hidden Folder
