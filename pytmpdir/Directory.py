@@ -211,8 +211,9 @@ class Directory(object):
             suffix=suffix, prefix=prefix, dir=self._path)
         os.close(newFileNum)
 
+        relativePath = os.path.relpath(newFileRealPath, self.path)
 
-        file = File(self, path=path, name=name, pathName=pathName, exists=True)
+        file = File(self, pathName=relativePath, exists=True)
         self._files[file.pathName] = file
         return file
 
@@ -335,6 +336,7 @@ class _NamedTempFileReaderCloser:
             return
         self._fileObject.close()
         self._isClosed = True
+
 
 class NamedTempFileReader:
     """ Named Temp File
