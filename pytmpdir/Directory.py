@@ -116,9 +116,17 @@ class Directory(object):
     def path(self) -> str:
         """ Path
 
-        :return The absoloute path of this directory
+        :return The absolute path of this directory
         """
         return self._path
+
+    @property
+    def delete(self) -> bool:
+        """ Delete
+
+        :return True if this directory will delete it's self when it falls out of scope.
+        """
+        return self._autoDelete
 
     @property
     def files(self) -> ['File']:
@@ -199,9 +207,9 @@ class Directory(object):
 
         # tempfile.mkstemp(suffix=None, prefix=None, dir=None, text=False)
 
-        newFileObj, newFileRealPath = tempfile.mkstemp(
+        newFileNum, newFileRealPath = tempfile.mkstemp(
             suffix=suffix, prefix=prefix, dir=self._path)
-        newFileObj.close()
+        os.close(newFileNum)
 
         return self.createFile(pathName=newFileRealPath)
 
@@ -353,21 +361,35 @@ class NamedTempFileReader:
         self._file = file
         self._fileObject = self._file.open()
 
-        closureFileObj = self._fileObject
-
         self._closer = _NamedTempFileReaderCloser(self._fileObject)
-        closureCloser = self._closer
-        self.__cleanupRef = weakref.ref(self, closureCloser.close)
+        self.__cleanupRef = weakref.ref(self, self._closer.close)
+
+    @property
+    def name(self) -> str:
+        """ Delete
+
+        :return The abolote path and file name of this file.
+        """
+        return self._file.realPath
 
     @property
     def delete(self) -> bool:
-        return True
+        """ Delete
+
+        :return True if the file will be deleted when all references to the directory
+                    including this objects reference, fall out of scope.
+        """
+        return self._directory.delete
 
     @delete.setter
     def delete(self, value: bool):
         raise Exception("You can not turn off auto delete for this class")
 
     def close(self):
+        """ Close
+
+        Closes the underlying file object
+        """
         self._closer.close()
 
     def __enter__(self):
