@@ -6,7 +6,7 @@ package_version = '0.2.3'
 setup(
     name=package_name,
     packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]),
-    install_requires=["sphinx_rtd_theme"],
+    install_requires=["sphinx_rtd_theme", "sphinx<4"],
     version=package_version,
     description='A class representing a file system directory, that deletes on '
                 'garbage collect.',
